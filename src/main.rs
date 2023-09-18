@@ -54,20 +54,25 @@ async fn main() {
         id: String::from("1")
     };
     let client = reqwest::Client::new();
-    let res = client.post(args.rpc_url.as_str()).json(&request).send().await.unwrap().text().await.unwrap();
+    let res = client.post(args.rpc_url.as_str())
+                            .json(&request)
+                            .send()
+                            .await
+                            .unwrap()
+                            .text()
+                            .await.
+                            unwrap();
     let data: Value = serde_json::from_str(&res).unwrap();
-
-
 
     loop{
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();       
         if block == 0{
             block = u64::from_str_radix(data["result"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
         }
+
         let mut texts = Vec::new();
         texts.push(String::from("System info:"));
         texts.push(String::from(format!("Timestamp: {}", now)));
-
 
         let request = GetBlockRequest{
             params: (format!("0x{:x}", block), true),
@@ -77,13 +82,26 @@ async fn main() {
         };
 
         let client = reqwest::Client::new();
-        let res = client.post(args.rpc_url.as_str()).json(&request).send().await.unwrap().text().await.unwrap();
+        let res = client.post(args.rpc_url.as_str())
+                                .json(&request)
+                                .send()
+                                .await
+                                .unwrap()
+                                .text()
+                                .await.
+                                unwrap();
+
         let raw_data: Value = serde_json::from_str(&res).unwrap();
         let data = raw_data["result"].clone();
         let hash = data["hash"].as_str().unwrap();
         let validator = data["miner"].as_str().unwrap();
         let txs = data["transactions"].as_array().unwrap();
-        let block_size = u64::from_str_radix(data["size"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap() / 1000;
+
+        let block_size = u64::from_str_radix(
+                                    data["size"].as_str()
+                                                    .unwrap()
+                                                    .trim_start_matches("0x"), 
+                                    16).unwrap() / 1000;
         let block_timestamp = u64::from_str_radix(data["timestamp"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
         //println!("{:?}", txs[0]);
         texts.push(String::from(""));
@@ -109,7 +127,6 @@ async fn main() {
         for tx in txs{
             let gas = u64::from_str_radix(tx["gas"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
             let gas_price = u64::from_str_radix(tx["gasPrice"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
-            let tx_id = u64::from_str_radix(tx["transactionIndex"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
             let tx_type: u64 = u64::from_str_radix(tx["type"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
 
             min_gas = min_gas.min(gas);
@@ -127,7 +144,6 @@ async fn main() {
                 _ => (),
             };
 
-            //println!("tx #{}: gas used {} priced at {}", tx_id, gas, gas_price);
         }
         
         avg_gas /= txs.len() as u64;
@@ -143,7 +159,10 @@ async fn main() {
         let target_diff = (100 as f64)*((sum_gas as f64) - (gas_target as f64)) / (gas_target as f64);
         let max_diff = (100 as f64)*((sum_gas as f64) - (gas_max as f64)) / (max_gas as f64);
         //println!("Gas target: sum={}, {}% from target, {}% from max", sum_gas, target_diff, max_diff);
-        texts.push(String::from(format!("Gas price: min={} Gwei, max={} Gwei, avg={} Gwei", (min_gas_price as f64) / 1e9, (max_gas_price as f64) / 1e9, (avg_gas_price as f64) / 1e9)));
+        texts.push(String::from(format!("Gas price: min={} Gwei, max={} Gwei, avg={} Gwei", 
+                                        (min_gas_price as f64) / 1e9, 
+                                        (max_gas_price as f64) / 1e9, 
+                                        (avg_gas_price as f64) / 1e9)));
         
         print_in_box(texts);
 
