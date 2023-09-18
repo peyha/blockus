@@ -1,8 +1,7 @@
 use reqwest;
-use std::time::{SystemTime};
+use std::time::SystemTime;
 use serde_json::Value;
-use serde::{Serialize};
-use std::collections::HashMap;
+use serde::Serialize;
 use clap::Parser;
 use std::u64;
 use std::thread;
