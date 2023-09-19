@@ -46,27 +46,27 @@ fn print_in_box(texts: Vec<String>){
 async fn main() {
     let args = Cli::parse();
     let mut block: u64 = 0;
-    
-    let request = GetBlockNumberRequest{
-        params: (),
-        jsonrpc: String::from("2.0"),
-        method: String::from("eth_blockNumber"),
-        id: String::from("1")
-    };
-    let client = reqwest::Client::new();
-    let res = client.post(args.rpc_url.as_str())
-                            .json(&request)
-                            .send()
-                            .await
-                            .unwrap()
-                            .text()
-                            .await.
-                            unwrap();
-    let data: Value = serde_json::from_str(&res).unwrap();
 
     loop{
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();       
-        if block == 0{
+        if block % 20 == 0 {
+            let request = GetBlockNumberRequest{
+                params: (),
+                jsonrpc: String::from("2.0"),
+                method: String::from("eth_blockNumber"),
+                id: String::from("1")
+            };
+            let client = reqwest::Client::new();
+            let res = client.post(args.rpc_url.as_str())
+                                    .json(&request)
+                                    .send()
+                                    .await
+                                    .unwrap()
+                                    .text()
+                                    .await.
+                                    unwrap();
+            let data: Value = serde_json::from_str(&res).unwrap();
+            println!("Catching up to last block");
             block = u64::from_str_radix(data["result"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
         }
 
