@@ -116,9 +116,11 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
         };
 
     }
-    
-    avg_gas /= txs.len() as u64;
-    avg_gas_price /= txs.len() as u64;
+
+    if txs.len() > 0 {   
+        avg_gas /= txs.len() as u64;
+        avg_gas_price /= txs.len() as u64;
+    }
 
     texts.push(String::from(format!("---transfer: {}, deployment: {}, execution: {}", type_count.0, type_count.1, type_count.2)));
 
