@@ -126,11 +126,15 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
 
     texts.push(String::from(""));
     texts.push(String::from("Gas info:"));
-    texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", min_gas, max_gas, avg_gas)));
+    let gas_used = u64::from_str_radix(data["gasUsed"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
 
     let (gas_target, gas_max) = (15000000, 30000000);
-    let target_diff = (100 as f64)*((sum_gas as f64) - (gas_target as f64)) / (gas_target as f64);
-    let max_diff = (100 as f64)*((sum_gas as f64) - (gas_max as f64)) / (max_gas as f64);
+    let target_diff = (100 as f64)*((gas_used as f64) - (gas_target as f64)) / (gas_target as f64);
+    let max_diff = (100 as f64)* (gas_used as f64) / (gas_max as f64);
+    texts.push(String::from(format!("---Gas total usage: {}, {:.2}% from target, {:.2}% of maximum", gas_used, target_diff, max_diff)));
+
+    texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", min_gas, max_gas, avg_gas)));
+
     //println!("Gas target: sum={}, {}% from target, {}% from max", sum_gas, target_diff, max_diff);
     texts.push(String::from(format!("---Gas price: min={} Gwei, max={} Gwei, avg={} Gwei", 
                                     (min_gas_price as f64) / 1e9, 
