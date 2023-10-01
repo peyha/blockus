@@ -143,6 +143,30 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     Ok(texts)
 }
 
+async fn get_block_number(url: &str) -> Result<u64, Box<dyn Error>>{
+    let request = GetBlockNumberRequest{
+        params: (),
+        jsonrpc: String::from("2.0"),
+        method: String::from("eth_blockNumber"),
+        id: String::from("1")
+    };
+    let client = reqwest::Client::new();
+    let res = client.post(url)
+                            .json(&request)
+                            .send()
+                            .await
+                            .unwrap()
+                            .text()
+                            .await.
+                            unwrap();
+    let data: Value = serde_json::from_str(&res).unwrap();
+
+    println!("Catching up to the last block");
+    let block = u64::from_str_radix(data["result"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;    
+    
+    Ok(block)
+}
+
 #[tokio::main]
 async fn main() {
     let args = Cli::parse();
@@ -151,25 +175,14 @@ async fn main() {
     loop{
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();       
         if block % 20 == 0 {
-            let request = GetBlockNumberRequest{
-                params: (),
-                jsonrpc: String::from("2.0"),
-                method: String::from("eth_blockNumber"),
-                id: String::from("1")
-            };
-            let client = reqwest::Client::new();
-            let res = client.post(args.rpc_url.as_str())
-                                    .json(&request)
-                                    .send()
-                                    .await
-                                    .unwrap()
-                                    .text()
-                                    .await.
-                                    unwrap();
-            let data: Value = serde_json::from_str(&res).unwrap();
 
-            println!("Catching up to the last block");
-            block = u64::from_str_radix(data["result"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
+            match get_block_number(args.rpc_url.as_str()).await{
+                Ok(block_number) => block = block_number,
+                _ => {
+                    println!("Error at time {}", now);
+                    continue;
+                }
+            }
         }
         match get_block_info(block, now, args.rpc_url.as_str()).await{
             Ok(texts) => {
