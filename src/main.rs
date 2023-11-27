@@ -77,7 +77,7 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     //println!("{:?}", txs[0]);
     texts.push(String::from(""));
     texts.push(String::from("Block info:"));
-    texts.push(String::from(format!("---Block timestamp: {} ", block_timestamp)));
+    texts.push(String::from(format!("---Block timestamp: {}", block_timestamp)));
     texts.push(String::from(format!("---Block number: {}", block)));
     texts.push(String::from(format!("---Block hash: {}", hash)));
     texts.push(String::from(format!("---Block validator: {}", validator)));
@@ -85,6 +85,7 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     texts.push(String::from(""));
     texts.push(String::from("Txs info:"));
     texts.push(String::from(format!("---Tx nb: {}", txs.len())));
+    
 
     let mut min_gas = u64::MAX;
     let mut max_gas = u64::MIN;
@@ -94,7 +95,7 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     let mut max_gas_price = u64::MIN;
     let mut avg_gas_price = 0;
     let mut type_count: (u64, u64, u64) = (0, 0, 0);
-
+    //println!("{}", data);
     for tx in txs{
         let gas = u64::from_str_radix(tx["gas"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
         let gas_price = u64::from_str_radix(tx["gasPrice"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
@@ -126,12 +127,22 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
 
     texts.push(String::from(""));
     texts.push(String::from("Gas info:"));
+
     let gas_used = u64::from_str_radix(data["gasUsed"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
 
-    let (gas_target, gas_max) = (15000000, 30000000);
+    let gas_max = u64::from_str_radix(data["gasLimit"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
+    let gas_target = gas_max / 2;
+     
     let target_diff = (100 as f64)*((gas_used as f64) - (gas_target as f64)) / (gas_target as f64);
     let max_diff = (100 as f64)* (gas_used as f64) / (gas_max as f64);
-    texts.push(String::from(format!("---Gas total usage: {}, {:.2}% from target, {:.2}% of maximum", gas_used, target_diff, max_diff)));
+    texts.push(String::from(format!("---Gas target: {}, Gas total usage {}", gas_target, gas_used)));
+    texts.push(String::from(format!("---Gas objective {:.2}% from target, {:.2}% of maximum", target_diff, max_diff)));
+    if target_diff < 0. {
+        texts.push(String::from("---Block size will increase"))
+    }
+    else{
+        texts.push(String::from("---Block size will decrease"));
+    }
 
     texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", min_gas, max_gas, avg_gas)));
 
@@ -140,6 +151,17 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
                                     (min_gas_price as f64) / 1e9, 
                                     (max_gas_price as f64) / 1e9, 
                                     (avg_gas_price as f64) / 1e9)));
+    
+
+    let base_fee = u64::from_str_radix(
+        data["baseFeePerGas"].as_str().ok_or("fail_convert")?
+                                .trim_start_matches("0x"),
+            16)?;
+                
+    texts.push(String::from(format!("---Base fee: {:.2} gwei", (base_fee as f64) * 1e-9)));
+    texts.push(String::from(format!("---Priority fee: min={:.2} Gwei, max={:.2} Gwei, avg {:.2} gwei", (min_gas_price as f64) * 1e-9 - (base_fee as f64) * 1e-9,
+                                                (max_gas_price as f64) * 1e-9 - (base_fee as f64) * 1e-9,
+                                                (avg_gas_price as f64) * 1e-9 - (base_fee as f64) * 1e-9)));
     Ok(texts)
 }
 
