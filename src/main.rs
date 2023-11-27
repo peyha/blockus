@@ -127,8 +127,22 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
 
     texts.push(String::from(""));
     texts.push(String::from("Gas info:"));
+
     let gas_used = u64::from_str_radix(data["gasUsed"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
 
+    let gas_max = u64::from_str_radix(data["gasLimit"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
+    let gas_target = gas_max / 2;
+     
+    let target_diff = (100 as f64)*((gas_used as f64) - (gas_target as f64)) / (gas_target as f64);
+    let max_diff = (100 as f64)* (gas_used as f64) / (gas_max as f64);
+    texts.push(String::from(format!("---Gas target: {}, Gas total usage {}", gas_target, gas_used)));
+    texts.push(String::from(format!("---Gas objective {:.2}% from target, {:.2}% of maximum", target_diff, max_diff)));
+    if target_diff < 0. {
+        texts.push(String::from("---Block size will increase"))
+    }
+    else{
+        texts.push(String::from("---Block size will decrease"));
+    }
 
     texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", min_gas, max_gas, avg_gas)));
 
