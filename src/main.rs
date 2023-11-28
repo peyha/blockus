@@ -7,6 +7,7 @@ use std::u64;
 use std::thread;
 use std::time::Duration;
 use std::error::Error;
+use std::fmt::Display;
 
 #[derive(Serialize)]
 struct GetBlockRequest{
@@ -29,6 +30,24 @@ struct GetBlockNumberRequest{
 struct Cli{
     #[arg(short, long)]
     rpc_url: String,
+}
+
+fn format_generic<T: Into<f64> + Display>(value: T) -> String {
+    const K: f64 = 1_000.0;
+    const M: f64 = 1_000_000.0;
+    const B: f64 = 1_000_000_000.0;
+
+    let value = value.into();
+
+    if value < K {
+        return format!("{}", value);
+    } else if value < M {
+        return format!("{:.1}K", value / K);
+    } else if value < B {
+        return format!("{:.1}M", value / M);
+    } else {
+        return format!("{:.1}B", value / B);
+    }
 }
 
 fn print_in_box(texts: Vec<String>){
@@ -135,7 +154,7 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
      
     let target_diff = (100 as f64)*((gas_used as f64) - (gas_target as f64)) / (gas_target as f64);
     let max_diff = (100 as f64)* (gas_used as f64) / (gas_max as f64);
-    texts.push(String::from(format!("---Gas target: {}, Gas total usage {}", gas_target, gas_used)));
+    texts.push(String::from(format!("---Gas target: {}, Gas total usage {}", format_generic(gas_target as u32), format_generic(gas_used as u32))));
     texts.push(String::from(format!("---Gas objective {:.2}% from target, {:.2}% of maximum", target_diff, max_diff)));
     if target_diff < 0. {
         texts.push(String::from("---Block size will increase"))
@@ -144,10 +163,10 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
         texts.push(String::from("---Block size will decrease"));
     }
 
-    texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", min_gas, max_gas, avg_gas)));
+    texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", format_generic(min_gas as u32), format_generic(max_gas as u32), format_generic(avg_gas as u32))));
 
     //println!("Gas target: sum={}, {}% from target, {}% from max", sum_gas, target_diff, max_diff);
-    texts.push(String::from(format!("---Gas price: min={} Gwei, max={} Gwei, avg={} Gwei", 
+    texts.push(String::from(format!("---Gas price: min={:.2} Gwei, max={:.2} Gwei, avg={:.2} Gwei", 
                                     (min_gas_price as f64) / 1e9, 
                                     (max_gas_price as f64) / 1e9, 
                                     (avg_gas_price as f64) / 1e9)));
