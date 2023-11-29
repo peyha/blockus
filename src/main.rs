@@ -28,7 +28,7 @@ struct GetBlockNumberRequest{
 #[derive(Parser)]
 #[command(author, version, about)]
 struct Cli{
-    #[arg(short, long)]
+    #[arg(short, long, default_value_t=String::from("https://eth.merkle.io"))]
     rpc_url: String,
 }
 
