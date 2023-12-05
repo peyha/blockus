@@ -157,10 +157,10 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     texts.push(String::from(format!("---Gas target: {}, Gas total usage {}", format_generic(gas_target as u32), format_generic(gas_used as u32))));
     texts.push(String::from(format!("---Gas objective {:.2}% from target, {:.2}% of maximum", target_diff, max_diff)));
     if target_diff < 0. {
-        texts.push(String::from("---Block size will increase"))
+        texts.push(String::from("---Base fee will decrease"))
     }
     else{
-        texts.push(String::from("---Block size will decrease"));
+        texts.push(String::from("---Base fee will increase"));
     }
 
     texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", format_generic(min_gas as u32), format_generic(max_gas as u32), format_generic(avg_gas as u32))));
