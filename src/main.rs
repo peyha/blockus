@@ -9,6 +9,7 @@ use std::time::Duration;
 use std::error::Error;
 use std::fmt::Display;
 
+// Struct for GetBlock RPC call
 #[derive(Serialize)]
 struct GetBlockRequest{
     params: (String, bool),
@@ -17,6 +18,7 @@ struct GetBlockRequest{
     id: String
 }
 
+// Struct for GetBlockNumber RPC call
 #[derive(Serialize)]
 struct GetBlockNumberRequest{
     params: (),
@@ -25,6 +27,7 @@ struct GetBlockNumberRequest{
     id: String
 }
 
+// CLI arguments
 #[derive(Parser)]
 #[command(author, version, about)]
 struct Cli{
@@ -32,6 +35,8 @@ struct Cli{
     rpc_url: String,
 }
 
+// Convert an f64 value to a human readable format 
+// e.g 523294.0223 = "523.3K"
 fn format_generic<T: Into<f64> + Display>(value: T) -> String {
     const K: f64 = 1_000.0;
     const M: f64 = 1_000_000.0;
@@ -50,6 +55,7 @@ fn format_generic<T: Into<f64> + Display>(value: T) -> String {
     }
 }
 
+// Prints one input string per line surrounded by a box
 fn print_in_box(texts: Vec<String>){
     let max_len = texts.iter().map(|s| s.len()).max().unwrap_or(0);
     let horizontal_line = format!("#{:-<width$}#", "", width=max_len);
@@ -62,10 +68,13 @@ fn print_in_box(texts: Vec<String>){
     println!("{}", horizontal_line);
 }
 
+// Retrieves the info of the block
 async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, Box<dyn Error>>{
     let mut texts = Vec::new();
     texts.push(String::from("System info:"));
     texts.push(String::from(format!("---Timestamp: {}", now)));
+
+    // Performs GetBlockRequest
 
     let request = GetBlockRequest{
         params: (format!("0x{:x}", block), true),
@@ -82,6 +91,7 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
                             .text()
                             .await?;
 
+
     let raw_data: Value = serde_json::from_str(&res)?;
     let data = raw_data["result"].clone();
     let hash = data["hash"].as_str().ok_or("fail convert")?;
@@ -93,7 +103,8 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
                                                 .trim_start_matches("0x"), 
                                 16)? / 1000;
     let block_timestamp = u64::from_str_radix(data["timestamp"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-    //println!("{:?}", txs[0]);
+    
+    // Creates block info section
     texts.push(String::from(""));
     texts.push(String::from("Block info:"));
     texts.push(String::from(format!("---Block timestamp: {}", block_timestamp)));
@@ -102,6 +113,8 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     texts.push(String::from(format!("---Block validator: {}", validator)));
     texts.push(String::from(format!("---Block size: {} kb", block_size)));
     texts.push(String::from(""));
+
+    // Creates transaction info section
     texts.push(String::from("Txs info:"));
     texts.push(String::from(format!("---Tx nb: {}", txs.len())));
     
@@ -114,7 +127,7 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     let mut max_gas_price = u64::MIN;
     let mut avg_gas_price = 0;
     let mut type_count: (u64, u64, u64) = (0, 0, 0);
-    //println!("{}", data);
+    
     for tx in txs{
         let gas = u64::from_str_radix(tx["gas"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
         let gas_price = u64::from_str_radix(tx["gasPrice"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
@@ -144,6 +157,7 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
 
     texts.push(String::from(format!("---transfer: {}, deployment: {}, execution: {}", type_count.0, type_count.1, type_count.2)));
 
+    // Creates gas info section
     texts.push(String::from(""));
     texts.push(String::from("Gas info:"));
 
@@ -151,7 +165,8 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
 
     let gas_max = u64::from_str_radix(data["gasLimit"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
     let gas_target = gas_max / 2;
-     
+    
+    // EIP-1559 Feature
     let target_diff = (100 as f64)*((gas_used as f64) - (gas_target as f64)) / (gas_target as f64);
     let max_diff = (100 as f64)* (gas_used as f64) / (gas_max as f64);
     texts.push(String::from(format!("---Gas target: {}, Gas total usage {}", format_generic(gas_target as u32), format_generic(gas_used as u32))));
@@ -164,8 +179,6 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     }
 
     texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", format_generic(min_gas as u32), format_generic(max_gas as u32), format_generic(avg_gas as u32))));
-
-    //println!("Gas target: sum={}, {}% from target, {}% from max", sum_gas, target_diff, max_diff);
     texts.push(String::from(format!("---Gas price: min={:.2} Gwei, max={:.2} Gwei, avg={:.2} Gwei", 
                                     (min_gas_price as f64) / 1e9, 
                                     (max_gas_price as f64) / 1e9, 
@@ -184,6 +197,7 @@ async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, 
     Ok(texts)
 }
 
+// Gets the last block number 
 async fn get_block_number(url: &str) -> Result<u64, Box<dyn Error>>{
     let request = GetBlockNumberRequest{
         params: (),
@@ -202,7 +216,6 @@ async fn get_block_number(url: &str) -> Result<u64, Box<dyn Error>>{
                             unwrap();
     let data: Value = serde_json::from_str(&res).unwrap();
 
-    println!("Catching up to the last block");
     let block = u64::from_str_radix(data["result"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;    
     
     Ok(block)
@@ -215,6 +228,8 @@ async fn main() {
 
     loop{
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();       
+        
+        // Catching up to the last block every 20 blocks
         if block % 20 == 0 {
 
             match get_block_number(args.rpc_url.as_str()).await{
@@ -236,9 +251,6 @@ async fn main() {
             _ => println!("Error on block {}", block),
         };  
         
-
     }
-
-
 
 }
