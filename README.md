@@ -45,6 +45,10 @@ or use your favorite one
 ```
 cargo run -- --rpc-url <RPC_LINK>
 ```
+## To-do
+
+- Implement post Dencun block info
+- Add other chains (op)
 
 ## Enjoy
 
