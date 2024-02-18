@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::num::ParseIntError;
 
+// Struct for GetBlockByNumber RPC call
 #[derive(Serialize)]
 struct GetBlockRequest {
     params: (String, bool),
@@ -21,6 +22,7 @@ struct GetBlockNumberRequest {
     id: String,
 }
 
+// Custom error handling
 pub enum BlockRequestError {
     RequestError(reqwest::Error),
     ConversionError(&'static str),
@@ -39,7 +41,6 @@ pub async fn get_block_info(
     texts.push(String::from(format!("---Timestamp: {}", now)));
 
     // Performs GetBlockRequest
-
     let request = GetBlockRequest {
         params: (format!("0x{:x}", block), true),
         jsonrpc: String::from("2.0"),
@@ -182,7 +183,6 @@ pub async fn get_block_info(
         (avg_gas_price as f64) * 1e-9 - (base_fee as f64) * 1e-9
     )));
 
-    //  blobversionedhashes (in tx) maxfeeperblobgas (in tx),
     // Creates blob info section
     // EIP-4844 Feature
     if data.get("blobGasUsed").is_some() {

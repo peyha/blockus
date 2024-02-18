@@ -35,6 +35,7 @@ pub fn print_in_box(texts: Vec<String>) {
     println!("{}", horizontal_line);
 }
 
+// Parse a serde Value which should represent a hexadecimal value to a int
 pub fn parse_hexa_value(input: &Value) -> Result<u64, BlockRequestError> {
     Ok(u64::from_str_radix(
         input
