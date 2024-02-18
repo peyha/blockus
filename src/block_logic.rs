@@ -1,10 +1,8 @@
 use crate::utils::{format_generic, parse_hexa_value};
-use json::parse;
 use reqwest;
 use serde::Serialize;
 use serde_json::Value;
-use std::error::Error;
-use std::{fmt::Display, num::ParseIntError};
+use std::num::ParseIntError;
 
 #[derive(Serialize)]
 struct GetBlockRequest {
