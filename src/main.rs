@@ -1,250 +1,22 @@
-use reqwest;
-use std::time::SystemTime;
-use serde_json::Value;
-use serde::Serialize;
 use clap::Parser;
-use std::u64;
 use std::thread;
 use std::time::Duration;
-use std::error::Error;
-use std::fmt::Display;
+use std::time::SystemTime;
+use std::u64;
+
+mod utils;
+use utils::print_in_box;
+mod block_logic;
+use block_logic::{get_block_info, get_block_number};
 
 // Struct for GetBlock RPC call
-#[derive(Serialize)]
-struct GetBlockRequest{
-    params: (String, bool),
-    jsonrpc: String,
-    method: String,
-    id: String
-}
-
-// Struct for GetBlockNumber RPC call
-#[derive(Serialize)]
-struct GetBlockNumberRequest{
-    params: (),
-    jsonrpc: String,
-    method: String,
-    id: String
-}
 
 // CLI arguments
 #[derive(Parser)]
 #[command(author, version, about)]
-struct Cli{
+struct Cli {
     #[arg(short, long, default_value_t=String::from("https://eth.merkle.io"))]
     rpc_url: String,
-}
-
-// Convert an f64 value to a human readable format 
-// e.g 523294.0223 = "523.3K"
-fn format_generic<T: Into<f64> + Display>(value: T) -> String {
-    const K: f64 = 1_000.0;
-    const M: f64 = 1_000_000.0;
-    const B: f64 = 1_000_000_000.0;
-
-    let value = value.into();
-
-    if value < K {
-        return format!("{}", value);
-    } else if value < M {
-        return format!("{:.1}K", value / K);
-    } else if value < B {
-        return format!("{:.1}M", value / M);
-    } else {
-        return format!("{:.1}B", value / B);
-    }
-}
-
-// Prints one input string per line surrounded by a box
-fn print_in_box(texts: Vec<String>){
-    let max_len = texts.iter().map(|s| s.len()).max().unwrap_or(0);
-    let horizontal_line = format!("#{:-<width$}#", "", width=max_len);
-    println!("{}", horizontal_line);
-
-    for text in texts{
-        let line = format!("#{:-<width$}#", text, width=max_len);
-        println!("{}", line);
-    }
-    println!("{}", horizontal_line);
-}
-
-// Retrieves the info of the block
-async fn get_block_info(block: u64, now: u64, url: &str) -> Result<Vec<String>, Box<dyn Error>>{
-    let mut texts = Vec::new();
-    texts.push(String::from("System info:"));
-    texts.push(String::from(format!("---Timestamp: {}", now)));
-
-    // Performs GetBlockRequest
-
-    let request = GetBlockRequest{
-        params: (format!("0x{:x}", block), true),
-        jsonrpc: String::from("2.0"),
-        method: String::from("eth_getBlockByNumber"),
-        id: String::from("1"),
-    };
-
-    let client = reqwest::Client::new();
-    let res = client.post(url)
-                            .json(&request)
-                            .send()
-                            .await?
-                            .text()
-                            .await?;
-
-
-    let raw_data: Value = serde_json::from_str(&res)?;
-    let data = raw_data["result"].clone();
-    let hash = data["hash"].as_str().ok_or("fail convert")?;
-    let validator = data["miner"].as_str().ok_or("fail convert")?;
-    let txs = data["transactions"].as_array().ok_or("fail convert")?;
-
-    let block_size = u64::from_str_radix(
-                                data["size"].as_str().ok_or("fail convert")?
-                                                .trim_start_matches("0x"), 
-                                16)? / 1000;
-    let block_timestamp = u64::from_str_radix(data["timestamp"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-    
-    // Creates block info section
-    texts.push(String::from(""));
-    texts.push(String::from("Block info:"));
-    texts.push(String::from(format!("---Block timestamp: {}", block_timestamp)));
-    texts.push(String::from(format!("---Block number: {}", block)));
-    texts.push(String::from(format!("---Block hash: {}", hash)));
-    texts.push(String::from(format!("---Block validator: {}", validator)));
-    texts.push(String::from(format!("---Block size: {} kb", block_size)));
-    texts.push(String::from(""));
-
-    // Creates transaction info section
-    texts.push(String::from("Txs info:"));
-    texts.push(String::from(format!("---Tx nb: {}", txs.len())));
-    
-
-    let mut min_gas = u64::MAX;
-    let mut max_gas = u64::MIN;
-    let mut avg_gas: u64 = 0;
-    let mut min_gas_price = u64::MAX;
-    let mut max_gas_price = u64::MIN;
-    let mut avg_gas_price = 0;
-    let mut type_count: (u64, u64, u64, u64) = (0, 0, 0, 0);
-    
-    for tx in txs{
-        let gas = u64::from_str_radix(tx["gas"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-        let gas_price = u64::from_str_radix(tx["gasPrice"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-        let tx_type: u64 = u64::from_str_radix(tx["type"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-
-        min_gas = min_gas.min(gas);
-        max_gas = max_gas.max(gas);
-        avg_gas += gas;
-        min_gas_price = min_gas_price.min(gas_price);
-        max_gas_price = max_gas_price.max(gas_price);
-        avg_gas_price += gas_price;
-
-        match tx_type {
-            0 => type_count.0 += 1,
-            1 => type_count.1 += 1,
-            2 => type_count.2 += 1,
-            3 => type_count.3 += 1,
-            _ => (),
-        };
-
-    }
-
-    if txs.len() > 0 {   
-        avg_gas /= txs.len() as u64;
-        avg_gas_price /= txs.len() as u64;
-    }
-
-    texts.push(String::from(format!("---transfer: {}, deployment: {}, execution: {}, blob: {}", type_count.0, type_count.1, type_count.2, type_count.3)));
-
-    // Creates gas info section
-    texts.push(String::from(""));
-    texts.push(String::from("Gas info:"));
-
-    let gas_used = u64::from_str_radix(data["gasUsed"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-
-    let gas_max = u64::from_str_radix(data["gasLimit"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-    let gas_target = gas_max / 2;
-    
-    // EIP-1559 Feature
-    let target_diff = (100 as f64)*((gas_used as f64) - (gas_target as f64)) / (gas_target as f64);
-    let max_diff = (100 as f64)* (gas_used as f64) / (gas_max as f64);
-    texts.push(String::from(format!("---Gas target: {}, Gas total usage {}", format_generic(gas_target as u32), format_generic(gas_used as u32))));
-    texts.push(String::from(format!("---Gas objective {:.2}% from target, {:.2}% of maximum", target_diff, max_diff)));
-    if target_diff < 0. {
-        texts.push(String::from("---Base fee will decrease"))
-    }
-    else{
-        texts.push(String::from("---Base fee will increase"));
-    }
-
-    texts.push(String::from(format!("---Gas usage: min={}, max={}, avg={}", format_generic(min_gas as u32), format_generic(max_gas as u32), format_generic(avg_gas as u32))));
-    texts.push(String::from(format!("---Gas price: min={:.2} Gwei, max={:.2} Gwei, avg={:.2} Gwei", 
-                                    (min_gas_price as f64) / 1e9, 
-                                    (max_gas_price as f64) / 1e9, 
-                                    (avg_gas_price as f64) / 1e9)));
-    
-
-    let base_fee = u64::from_str_radix(
-        data["baseFeePerGas"].as_str().ok_or("fail_convert")?
-                                .trim_start_matches("0x"),
-            16)?;
-                
-    texts.push(String::from(format!("---Base fee: {:.2} gwei", (base_fee as f64) * 1e-9)));
-    texts.push(String::from(format!("---Priority fee: min={:.2} Gwei, max={:.2} Gwei, avg {:.2} gwei", (min_gas_price as f64) * 1e-9 - (base_fee as f64) * 1e-9,
-                                                (max_gas_price as f64) * 1e-9 - (base_fee as f64) * 1e-9,
-                                                (avg_gas_price as f64) * 1e-9 - (base_fee as f64) * 1e-9)));
-    
-    //  blobversionedhashes (in tx) maxfeeperblobgas (in tx), 
-    // Creates blob info section
-    // EIP-4844 Feature
-    if data.get("blobGasUsed").is_some() {
-        texts.push(String::from(""));
-        texts.push(String::from("Blob info:"));
-
-        let blob_gas_used = u64::from_str_radix(data["blobGasUsed"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-        let excess_blob_gas = u64::from_str_radix(data["excessBlobGas"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;
-        texts.push(String::from(format!("---Blob gas used: {}", format_generic(blob_gas_used as u32))));
-        texts.push(String::from(format!("---Excess blob gas: {}", format_generic(excess_blob_gas as u32))));
-        let blob_gas_target: u64 = 393216;
-        let blob_gas_max: u64 = 786432;
-        let blob_target_diff = (100 as f64)*((blob_gas_used as f64) - (blob_gas_target as f64)) / (blob_gas_target as f64);
-        let blob_max_diff = (100 as f64)* (blob_gas_used as f64) / (blob_gas_max as f64);      
-        texts.push(String::from(format!("---Blob gas target: {}, Blob gas total usage {}, Blob excess gas {}", format_generic(blob_gas_target as u32), format_generic(blob_gas_used as u32), format_generic(excess_blob_gas as u32))));
-        texts.push(String::from(format!("---Blob gas objective {:.2}% from target, {:.2}% of maximum", blob_target_diff, blob_max_diff)));
-        if blob_target_diff < 0. {
-            texts.push(String::from("---Blob base fee will decrease"));
-        }
-        else {
-            texts.push(String::from("---Blob gas fee will increase"));
-        }
-
-    }
-    Ok(texts)
-}
-
-// Gets the last block number 
-async fn get_block_number(url: &str) -> Result<u64, Box<dyn Error>>{
-    let request = GetBlockNumberRequest{
-        params: (),
-        jsonrpc: String::from("2.0"),
-        method: String::from("eth_blockNumber"),
-        id: String::from("1")
-    };
-    let client = reqwest::Client::new();
-    let res = client.post(url)
-                            .json(&request)
-                            .send()
-                            .await
-                            .unwrap()
-                            .text()
-                            .await.
-                            unwrap();
-        
-    let data: Value = serde_json::from_str(&res).unwrap();
-
-    let block = u64::from_str_radix(data["result"].as_str().ok_or("fail convert")?.trim_start_matches("0x"), 16)?;    
-    
-    Ok(block)
 }
 
 #[tokio::main]
@@ -252,13 +24,15 @@ async fn main() {
     let args = Cli::parse();
     let mut block: u64 = 0;
 
-    loop{
-        let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();       
-        
+    loop {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
         // Catching up to the last block every 20 blocks
         if block % 20 == 0 {
-
-            match get_block_number(args.rpc_url.as_str()).await{
+            match get_block_number(args.rpc_url.as_str()).await {
                 Ok(block_number) => block = block_number,
                 _ => {
                     println!("Error at time {}", now);
@@ -266,7 +40,7 @@ async fn main() {
                 }
             }
         }
-        match get_block_info(block, now, args.rpc_url.as_str()).await{
+        match get_block_info(block, now, args.rpc_url.as_str()).await {
             Ok(texts) => {
                 print_in_box(texts);
                 //sleeping until next block
@@ -275,8 +49,6 @@ async fn main() {
                 block += 1;
             }
             _ => println!("Error on block {}", block),
-        };  
-        
+        };
     }
-
 }
